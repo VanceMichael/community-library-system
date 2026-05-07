@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: library-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=library
+      - POSTGRES_USER=library
+      - POSTGRES_PASSWORD=library123
+      - TZ=Asia/Shanghai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - library-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U library -d library"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: library-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=library_system.settings
+      - DEBUG=0
+      - SECRET_KEY=library-system-production-secret-key-2024
+      - ALLOWED_HOSTS=*
+      - DB_ENGINE=django.db.backends.postgresql
+      - DB_NAME=library
+      - DB_USER=library
+      - DB_PASSWORD=library123
+      - DB_HOST=db
+      - DB_PORT=5432
+      - TZ=Asia/Shanghai
+    volumes:
+      - static_data:/app/staticfiles
+      - media_data:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - library-network
+    command: >
+      sh -c "python manage.py makemigrations books readers borrowings fines purchases statistics &&
+             python manage.py migrate &&
+             python manage.py init_library &&
+             python manage.py collectstatic --noinput &&
+             gunicorn library_system.wsgi:application --bind 0.0.0.0:8000 --workers 4"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: library-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - TZ=Asia/Shanghai
+    depends_on:
+      - backend
+    networks:
+      - library-network
+
+volumes:
+  postgres_data:
+    driver: local
+  static_data:
+    driver: local
+  media_data:
+    driver: local
+
+networks:
+  library-network:
+    driver: bridge
