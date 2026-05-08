@@ -52,22 +52,28 @@ class Borrowing(models.Model):
         super().save(*args, **kwargs)
 
     def is_overdue(self):
-        if self.status == 'returned' or self.return_date:
+        if self.return_date:
+            return_date = make_aware_if_naive(self.return_date)
+            due_date = make_aware_if_naive(self.due_date)
+            return return_date > due_date
+        if self.status == 'returned':
             return False
         now = timezone.now()
         due_date = make_aware_if_naive(self.due_date)
         return now > due_date
 
     def get_overdue_days(self):
-        if self.status == 'returned' or self.return_date:
-            return 0
         if self.return_date:
             return_date = make_aware_if_naive(self.return_date)
             due_date = make_aware_if_naive(self.due_date)
-            return (return_date - due_date).days
+            days = (return_date - due_date).days
+            return max(days, 0)
+        if self.status == 'returned':
+            return 0
         now = timezone.now()
         due_date = make_aware_if_naive(self.due_date)
-        return (now - due_date).days
+        days = (now - due_date).days
+        return max(days, 0)
 
     def calculate_fine(self):
         if not self.is_overdue():

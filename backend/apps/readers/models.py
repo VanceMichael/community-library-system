@@ -39,4 +39,7 @@ class Reader(models.Model):
             return False, '读者证状态异常'
         if self.borrow_count >= self.borrow_limit:
             return False, f'已达到借阅限额 ({self.borrow_limit}本)'
+        from apps.fines.models import Fine
+        if Fine.objects.filter(reader=self, status='unpaid').exists():
+            return False, '有未缴纳的罚款，请先缴纳'
         return True, '可以借阅'

@@ -5,6 +5,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
+from decimal import Decimal
 from .models import Borrowing, Reservation
 from .serializers import (
     BorrowingSerializer, BorrowingListSerializer, BorrowingCreateSerializer,
@@ -62,6 +63,18 @@ class BorrowingViewSet(viewsets.ModelViewSet):
             fine = borrowing.calculate_fine()
             borrowing.fine_amount = fine
             borrowing.save()
+
+            if fine > Decimal('0.00'):
+                from apps.fines.models import Fine
+                Fine.objects.get_or_create(
+                    borrowing=borrowing,
+                    defaults={
+                        'reader': borrowing.reader,
+                        'amount': fine,
+                        'overdue_days': borrowing.get_overdue_days(),
+                        'status': 'unpaid',
+                    }
+                )
 
             book = borrowing.book
             book.available_copies += 1
