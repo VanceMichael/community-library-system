@@ -42,16 +42,21 @@ class BorrowingListSerializer(serializers.ModelSerializer):
     reader_name = serializers.CharField(source='reader.name', read_only=True)
     book_title = serializers.CharField(source='book.title', read_only=True)
     overdue_days = serializers.SerializerMethodField()
+    current_fine = serializers.SerializerMethodField()
 
     class Meta:
         model = Borrowing
         fields = [
             'id', 'reader_name', 'book_title', 'borrow_date',
-            'due_date', 'status', 'renew_count', 'overdue_days'
+            'due_date', 'status', 'renew_count', 'overdue_days',
+            'fine_amount', 'fine_paid', 'current_fine'
         ]
 
     def get_overdue_days(self, obj):
         return obj.get_overdue_days()
+
+    def get_current_fine(self, obj):
+        return obj.calculate_fine()
 
 
 class BorrowingCreateSerializer(serializers.Serializer):

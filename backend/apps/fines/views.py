@@ -2,7 +2,7 @@ from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db import transaction
+from django.db import transaction, models
 from django.utils import timezone
 from datetime import timedelta
 from .models import Fine, OverdueReminder
@@ -26,9 +26,11 @@ class FineViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def generate_fines(self, request):
         overdue_borrowings = Borrowing.objects.filter(
-            status__in=['borrowed', 'overdue'],
-            due_date__lt=timezone.now()
-        ).exclude(fine__isnull=False)
+            fine__isnull=True
+        ).filter(
+            models.Q(status__in=['borrowed', 'overdue'], due_date__lt=timezone.now()) |
+            models.Q(status='returned', fine_amount__gt=0)
+        )
 
         created_fines = []
         for borrowing in overdue_borrowings:
@@ -38,6 +40,9 @@ class FineViewSet(viewsets.ModelViewSet):
 
             overdue_days = borrowing.get_overdue_days()
             fine_amount = borrowing.calculate_fine()
+
+            if fine_amount <= 0:
+                continue
 
             fine, created = Fine.objects.get_or_create(
                 borrowing=borrowing,
